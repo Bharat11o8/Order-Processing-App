@@ -44,13 +44,17 @@ export function SearchableSelect({
         function handleClickOutside(event: MouseEvent) {
             if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
-                // Reset search if no selection made or keep it? Better to reset to show selected label
-                if (!isOpen) setSearch('');
+                // Reset search to selected option label if closed without selection
+                if (selectedOption) {
+                    setSearch(selectedOption.label);
+                } else {
+                    setSearch('');
+                }
             }
         }
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isOpen]);
+    }, [selectedOption]);
 
     // Update search when value changes externally
     useEffect(() => {

@@ -104,7 +104,7 @@ export default function CreateOrderPage() {
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                     {/* Dealer Section */}
-                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                             <User className="w-5 h-5 text-blue-600" />
                             <h2 className="text-lg font-bold text-slate-800">Dealer Details</h2>
@@ -119,7 +119,7 @@ export default function CreateOrderPage() {
                                     render={({ field }) => (
                                         <SearchableSelect
                                             options={dealerOptions}
-                                            value={field.value}
+                                            value={field.value || ''}
                                             onChange={(val) => {
                                                 field.onChange(val);
                                                 setValue('subDealerId', '');
@@ -174,7 +174,7 @@ export default function CreateOrderPage() {
                     </section>
 
                     {/* Items Section */}
-                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <ShoppingCart className="w-5 h-5 text-blue-600" />
@@ -212,7 +212,7 @@ export default function CreateOrderPage() {
                     </section>
 
                     {/* Payment Section */}
-                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <section className="bg-white rounded-2xl shadow-sm border border-slate-200">
                         <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                             <CreditCard className="w-5 h-5 text-blue-600" />
                             <h2 className="text-lg font-bold text-slate-800">Payment & Remarks</h2>
