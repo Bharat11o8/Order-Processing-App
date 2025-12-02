@@ -7,6 +7,70 @@ import { createOrderSchema } from '@/lib/validators/order';
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
 
+export async function GET(request: Request) {
+    try {
+        // 1. Auth Check
+        const cookieStore = await cookies();
+        const token = cookieStore.get('session_token')?.value;
+        if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const userId = decoded.userId;
+
+        // 2. Parse Query Params
+        const { searchParams } = new URL(request.url);
+        const page = parseInt(searchParams.get('page') || '1');
+        const limit = parseInt(searchParams.get('limit') || '10');
+        const status = searchParams.get('status');
+        const search = searchParams.get('q');
+
+        const skip = (page - 1) * limit;
+
+        // 3. Build Filter
+        const where: any = { userId }; // Enforce ASM ownership
+
+        if (status && status !== 'ALL') {
+            where.status = status;
+        }
+
+        if (search) {
+            where.OR = [
+                { orderNumber: { contains: search, mode: 'insensitive' } },
+                { dealer: { name: { contains: search, mode: 'insensitive' } } },
+            ];
+        }
+
+        // 4. Fetch Data
+        const [orders, total] = await prisma.$transaction([
+            prisma.order.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    dealer: { select: { name: true } },
+                    _count: { select: { items: true } }
+                }
+            }),
+            prisma.order.count({ where })
+        ]);
+
+        return NextResponse.json({
+            data: orders,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Fetch orders error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
 export async function POST(request: Request) {
     try {
         // 1. Auth Check
