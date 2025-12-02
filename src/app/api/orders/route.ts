@@ -63,11 +63,17 @@ export async function POST(request: Request) {
                                 throw new Error(`Unit type mismatch for design ${design.productCode}`);
                             }
 
+                            // Validate Seat Type
+                            if (design.seatOption === 'SINGLE' && item.seatType !== 'SINGLE') throw new Error(`Invalid seat type for ${design.productCode}. Must be SINGLE.`);
+                            if (design.seatOption === 'DOUBLE' && item.seatType !== 'DOUBLE') throw new Error(`Invalid seat type for ${design.productCode}. Must be DOUBLE.`);
+                            if (design.seatOption === 'BOTH' && !item.seatType) throw new Error(`Seat type required for ${design.productCode}`);
+
                             return {
                                 designId: item.designId,
                                 colorId: item.colorId,
                                 quantity: item.quantity,
                                 unitType: design.unitType, // Force from DB
+                                seatType: item.seatType,
                                 productCode: design.productCode, // Force from DB
                             };
                         })),

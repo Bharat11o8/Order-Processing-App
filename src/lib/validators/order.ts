@@ -5,6 +5,7 @@ export const orderItemSchema = z.object({
     colorId: z.string().optional().nullable(),
     quantity: z.number().int().positive('Quantity must be at least 1'),
     unitType: z.enum(['PCS', 'SET']),
+    seatType: z.enum(['SINGLE', 'DOUBLE']).optional().nullable(),
     productCode: z.string(), // Snapshot
     // We can add more validation here if needed, but server will verify against DB
 });

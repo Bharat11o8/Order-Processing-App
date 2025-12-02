@@ -136,6 +136,7 @@ model OrderItem {
   color       DesignColor? @relation(fields: [colorId], references: [id])
   productCode String
   unitType    UnitType
+  seatType    SeatOption?  // Stores the selected option (SINGLE/DOUBLE)
   quantity    Int
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

@@ -44,6 +44,7 @@ async function main() {
                 quantity: 5,
                 unitType: design.unitType,
                 productCode: design.productCode,
+                seatType: design.seatOption === 'BOTH' ? 'SINGLE' : design.seatOption,
                 colorId: design.colors[0]?.id || null
             }
         ]
