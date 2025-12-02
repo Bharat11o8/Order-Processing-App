@@ -116,7 +116,7 @@ export async function POST(request: Request) {
                     creditDays: paymentType === 'CREDIT' ? creditDays : null,
                     remarks,
                     totalQuantity,
-                    status: 'SUBMITTED', // Direct to submitted for now
+                    status: 'DRAFT', // Default to DRAFT
                     items: {
                         create: await Promise.all(items.map(async (item) => {
                             // Fetch Design to verify/snapshot details
