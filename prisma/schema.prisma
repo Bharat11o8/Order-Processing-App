@@ -13,11 +13,161 @@ model User {
   username     String   @unique
   passwordHash String
   role         Role
+  zoneId       String?
+  zone         Zone?    @relation(fields: [zoneId], references: [id])
+  orders       Order[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model Zone {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  users     User[]
+  dealers   Dealer[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Dealer {
+  id         String      @id @default(cuid())
+  name       String
+  code       String      @unique
+  location   String
+  mobile     String?
+  zoneId     String
+  zone       Zone        @relation(fields: [zoneId], references: [id])
+  subDealers SubDealer[]
+  orders     Order[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model SubDealer {
+  id        String   @id @default(cuid())
+  name      String
+  dealerId  String
+  dealer    Dealer   @relation(fields: [dealerId], references: [id])
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OEM {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  vehicles  Vehicle[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Vehicle {
+  id           String        @id @default(cuid())
+  name         String
+  oemId        String
+  oem          OEM           @relation(fields: [oemId], references: [id])
+  vehicleTypes VehicleType[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model VehicleType {
+  id        String   @id @default(cuid())
+  name      String
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  designs   Design[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Design {
+  id            String        @id @default(cuid())
+  productCode   String        @unique // PNC
+  description   String?
+  unitType      UnitType
+  seatOption    SeatOption    @default(BOTH)
+  vehicleTypeId String
+  vehicleType   VehicleType   @relation(fields: [vehicleTypeId], references: [id])
+  colors        DesignColor[]
+  orderItems    OrderItem[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model DesignColor {
+  id         String      @id @default(cuid())
+  name       String
+  designId   String
+  design     Design      @relation(fields: [designId], references: [id])
+  orderItems OrderItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique
+  status         OrderStatus @default(DRAFT)
+  dealerId       String
+  dealer         Dealer      @relation(fields: [dealerId], references: [id])
+  subDealerId    String?
+  subDealer      SubDealer?  @relation(fields: [subDealerId], references: [id])
+  dealerLocation String
+  dealerMobile   String?
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  totalQuantity  Int
+  paymentType    PaymentType
+  creditDays     Int?
+  remarks        String?
+  items          OrderItem[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String       @id @default(cuid())
+  orderId     String
+  order       Order        @relation(fields: [orderId], references: [id])
+  designId    String
+  design      Design       @relation(fields: [designId], references: [id])
+  colorId     String?
+  color       DesignColor? @relation(fields: [colorId], references: [id])
+  productCode String
+  unitType    UnitType
+  quantity    Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 enum Role {
   ASM
   ADMIN
+}
+
+enum UnitType {
+  PCS
+  SET
+}
+
+enum SeatOption {
+  SINGLE
+  DOUBLE
+  BOTH
+}
+
+enum PaymentType {
+  ADVANCE
+  CREDIT
+}
+
+enum OrderStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  PROCESSING
+  DISPATCHED
+  COMPLETED
+  CANCELLED
 }

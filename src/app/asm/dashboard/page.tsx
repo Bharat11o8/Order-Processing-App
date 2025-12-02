@@ -23,9 +23,9 @@ export default function ASMDashboard() {
                         <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
                         <p className="text-slate-500 mt-1">Manage your zone's orders and dealers.</p>
                     </div>
-                    <button className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-2">
+                    <a href="/asm/orders/create" className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-2">
                         <span>+</span> Create New Order
-                    </button>
+                    </a>
                 </header>
 
                 {/* Stats Row */}
