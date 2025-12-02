@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { createOrderSchema, type CreateOrderRequest } from '@/lib/validators/order';
 import { Trash2, Plus, Loader2, ShoppingCart, User, CreditCard } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 // Types for Catalog Data
 type Dealer = { id: string; name: string; location: string; mobile: string | null; subDealers: { id: string; name: string }[] };
@@ -83,6 +84,9 @@ export default function CreateOrderPage() {
         }
     }
 
+    // Transform options for SearchableSelect
+    const dealerOptions = dealers.map(d => ({ id: d.id, label: d.name, subLabel: d.location }));
+
     return (
         <div className="min-h-screen bg-slate-50/50 p-6 font-sans">
             <div className="max-w-6xl mx-auto">
@@ -109,17 +113,21 @@ export default function CreateOrderPage() {
                         <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Select Dealer</label>
-                                <select
-                                    {...register('dealerId')}
-                                    className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-800"
-                                    onChange={(e) => {
-                                        register('dealerId').onChange(e);
-                                        setValue('subDealerId', '');
-                                    }}
-                                >
-                                    <option value="">-- Select Dealer --</option>
-                                    {dealers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.location})</option>)}
-                                </select>
+                                <Controller
+                                    control={control}
+                                    name="dealerId"
+                                    render={({ field }) => (
+                                        <SearchableSelect
+                                            options={dealerOptions}
+                                            value={field.value}
+                                            onChange={(val) => {
+                                                field.onChange(val);
+                                                setValue('subDealerId', '');
+                                            }}
+                                            placeholder="Search Dealer..."
+                                        />
+                                    )}
+                                />
                                 {errors.dealerId && <p className="text-red-600 text-xs mt-1 font-medium">{errors.dealerId.message}</p>}
                             </div>
 
@@ -148,10 +156,18 @@ export default function CreateOrderPage() {
                             {selectedDealer && selectedDealer.subDealers.length > 0 && (
                                 <div className="md:col-span-2">
                                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">Sub-Dealer</label>
-                                    <select {...register('subDealerId')} className="w-full px-3 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-800">
-                                        <option value="">-- Select Sub-Dealer --</option>
-                                        {selectedDealer.subDealers.map(sd => <option key={sd.id} value={sd.id}>{sd.name}</option>)}
-                                    </select>
+                                    <Controller
+                                        control={control}
+                                        name="subDealerId"
+                                        render={({ field }) => (
+                                            <SearchableSelect
+                                                options={selectedDealer.subDealers.map(sd => ({ id: sd.id, label: sd.name }))}
+                                                value={field.value || ''}
+                                                onChange={field.onChange}
+                                                placeholder="Search Sub-Dealer..."
+                                            />
+                                        )}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -268,7 +284,7 @@ function OrderItemRow({ index, control, register, remove, oems, setValue, errors
     const itemDesignId = watch(`items.${index}.designId`);
     const currentDesign = designs.find(d => d.id === itemDesignId);
 
-    // Fetch Logic (Same as before)
+    // Fetch Logic
     useEffect(() => {
         if (selectedOem) {
             fetch(`/api/catalog/vehicles?oemId=${selectedOem}`).then(r => r.json()).then(setVehicles);
@@ -292,42 +308,36 @@ function OrderItemRow({ index, control, register, remove, oems, setValue, errors
             {/* OEM */}
             <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">OEM</label>
-                <select
-                    className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800"
+                <SearchableSelect
+                    options={oems.map((o: any) => ({ id: o.id, label: o.name }))}
                     value={selectedOem}
-                    onChange={(e) => { setSelectedOem(e.target.value); setSelectedVehicle(''); setSelectedType(''); }}
-                >
-                    <option value="">Select</option>
-                    {oems.map((o: any) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
+                    onChange={(val) => { setSelectedOem(val); setSelectedVehicle(''); setSelectedType(''); }}
+                    placeholder="Select OEM"
+                />
             </div>
 
             {/* Vehicle */}
             <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Vehicle</label>
-                <select
-                    className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+                <SearchableSelect
+                    options={vehicles.map((v: any) => ({ id: v.id, label: v.name }))}
                     value={selectedVehicle}
+                    onChange={(val) => { setSelectedVehicle(val); setSelectedType(''); }}
+                    placeholder="Select Vehicle"
                     disabled={!selectedOem}
-                    onChange={(e) => { setSelectedVehicle(e.target.value); setSelectedType(''); }}
-                >
-                    <option value="">Select</option>
-                    {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
+                />
             </div>
 
             {/* Type */}
             <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Type</label>
-                <select
-                    className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+                <SearchableSelect
+                    options={types.map((t: any) => ({ id: t.id, label: t.name }))}
                     value={selectedType}
+                    onChange={(val) => setSelectedType(val)}
+                    placeholder="Select Type"
                     disabled={!selectedVehicle}
-                    onChange={(e) => setSelectedType(e.target.value)}
-                >
-                    <option value="">Select</option>
-                    {types.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
+                />
             </div>
 
             {/* Design */}
@@ -337,13 +347,12 @@ function OrderItemRow({ index, control, register, remove, oems, setValue, errors
                     control={control}
                     name={`items.${index}.designId`}
                     render={({ field }) => (
-                        <select
-                            {...field}
-                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
-                            disabled={!selectedType}
-                            onChange={(e) => {
-                                field.onChange(e);
-                                const design = designs.find(d => d.id === e.target.value);
+                        <SearchableSelect
+                            options={designs.map((d: any) => ({ id: d.id, label: d.productCode }))}
+                            value={field.value}
+                            onChange={(val) => {
+                                field.onChange(val);
+                                const design = designs.find(d => d.id === val);
                                 if (design) {
                                     setValue(`items.${index}.productCode`, design.productCode);
                                     setValue(`items.${index}.unitType`, design.unitType);
@@ -364,12 +373,9 @@ function OrderItemRow({ index, control, register, remove, oems, setValue, errors
                                     else setValue(`items.${index}.seatType`, '');
                                 }
                             }}
-                        >
-                            <option value="">Select</option>
-                            {designs.map((d: any) => (
-                                <option key={d.id} value={d.id}>{d.productCode}</option>
-                            ))}
-                        </select>
+                            placeholder="Select Design"
+                            disabled={!selectedType}
+                        />
                     )}
                 />
                 {errors.items?.[index]?.designId && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].designId.message}</p>}

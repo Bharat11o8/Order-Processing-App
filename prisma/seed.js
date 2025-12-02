@@ -6,6 +6,19 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('Starting seed...');
 
+    // 0. Cleanup (Optional: use with caution in prod)
+    // Delete in order of dependency
+    await prisma.orderItem.deleteMany();
+    await prisma.order.deleteMany();
+    await prisma.designColor.deleteMany();
+    await prisma.design.deleteMany();
+    await prisma.vehicleType.deleteMany();
+    await prisma.vehicle.deleteMany();
+    await prisma.subDealer.deleteMany();
+    // We keep Users, Zones, Dealers, OEMs mostly, but to be safe for catalog re-run:
+    // Actually, let's just rely on upsert for top levels and delete catalog to re-create.
+    console.log('Cleanup done.');
+
     // 1. Create Zones
     const zonesData = [
         'South Zone', 'West Bengal', 'Bihar & Jharkhand', 'MP & Maharashtra',
@@ -71,7 +84,7 @@ async function main() {
         const zone = zones[zoneName];
         for (let i = 1; i <= 2; i++) {
             const dealerCode = `DLR-${zoneName.substring(0, 3).toUpperCase()}-${i}`;
-            await prisma.dealer.upsert({
+            const dealer = await prisma.dealer.upsert({
                 where: { code: dealerCode },
                 update: {},
                 create: {
@@ -82,6 +95,16 @@ async function main() {
                     zoneId: zone.id,
                 },
             });
+
+            // Create Sub-Dealers
+            if (i === 1) { // Only for the first dealer in each zone to show variety
+                await prisma.subDealer.createMany({
+                    data: [
+                        { name: `${dealer.name} - Sub 1`, dealerId: dealer.id },
+                        { name: `${dealer.name} - Sub 2`, dealerId: dealer.id },
+                    ]
+                });
+            }
         }
     }
     console.log('Dealers created.');
