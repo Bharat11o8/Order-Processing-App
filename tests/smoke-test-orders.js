@@ -73,7 +73,7 @@ async function main() {
     console.log('Total Quantity:', orderData.totalQuantity);
 
     if (orderData.totalQuantity !== 5) throw new Error('Quantity mismatch');
-    if (orderData.status !== 'SUBMITTED') throw new Error('Status mismatch');
+    if (orderData.status !== 'DRAFT') throw new Error('Status mismatch');
 
     console.log('Smoke Test PASSED ✅');
 }

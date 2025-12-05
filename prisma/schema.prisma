@@ -54,42 +54,44 @@ model SubDealer {
 }
 
 model OEM {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  vehicles  Vehicle[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String   @unique
+  models    Model[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Vehicle {
-  id           String        @id @default(cuid())
-  name         String
-  oemId        String
-  oem          OEM           @relation(fields: [oemId], references: [id])
-  vehicleTypes VehicleType[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+model Model {
+  id            String       @id @default(cuid())
+  name          String
+  oemId         String
+  oem           OEM          @relation(fields: [oemId], references: [id])
+  vehicleTypeId String?
+  vehicleType   VehicleType? @relation(fields: [vehicleTypeId], references: [id])
+  designs       Design[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }
 
 model VehicleType {
   id        String   @id @default(cuid())
   name      String
-  vehicleId String
-  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
-  designs   Design[]
+  models    Model[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Design {
   id            String        @id @default(cuid())
-  productCode   String        @unique // PNC
+  productCode   String        @unique // Base Code (fallback)
+  name          String?       // Display Name
   description   String?
   unitType      UnitType
   seatOption    SeatOption    @default(BOTH)
-  vehicleTypeId String
-  vehicleType   VehicleType   @relation(fields: [vehicleTypeId], references: [id])
+  modelId       String
+  model         Model         @relation(fields: [modelId], references: [id])
   colors        DesignColor[]
+  variants      ProductVariant[]
   orderItems    OrderItem[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -98,11 +100,27 @@ model Design {
 model DesignColor {
   id         String      @id @default(cuid())
   name       String
+  code       String?
   designId   String
   design     Design      @relation(fields: [designId], references: [id])
+  variants   ProductVariant[]
   orderItems OrderItem[]
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
+}
+
+model ProductVariant {
+  id          String       @id @default(cuid())
+  designId    String
+  design      Design       @relation(fields: [designId], references: [id])
+  colorId     String?
+  color       DesignColor? @relation(fields: [colorId], references: [id])
+  seatType    SeatOption?  // SINGLE/DOUBLE/null (if N/A)
+  productCode String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([designId, colorId, seatType])
 }
 
 model Order {

@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const vehicleTypeId = searchParams.get('vehicleTypeId');
+    const { modelId } = Object.fromEntries(searchParams);
 
-    if (!vehicleTypeId) {
-        return NextResponse.json({ error: 'vehicleTypeId is required' }, { status: 400 });
+    if (!modelId) {
+        return NextResponse.json({ error: 'Model ID required' }, { status: 400 });
     }
 
     try {
         const designs = await prisma.design.findMany({
-            where: { vehicleTypeId },
+            where: { modelId },
             include: {
                 colors: true,
+                variants: true,
             },
             orderBy: { productCode: 'asc' },
         });

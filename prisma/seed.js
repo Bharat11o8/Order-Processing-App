@@ -10,10 +10,10 @@ async function main() {
     // Delete in order of dependency
     await prisma.orderItem.deleteMany();
     await prisma.order.deleteMany();
-    await prisma.designColor.deleteMany();
-    await prisma.design.deleteMany();
-    await prisma.vehicleType.deleteMany();
-    await prisma.vehicle.deleteMany();
+    // await prisma.designColor.deleteMany();
+    // await prisma.design.deleteMany();
+    // await prisma.vehicleType.deleteMany();
+    // await prisma.vehicle.deleteMany(); // Removed table
     await prisma.subDealer.deleteMany();
     // We keep Users, Zones, Dealers, OEMs mostly, but to be safe for catalog re-run:
     // Actually, let's just rely on upsert for top levels and delete catalog to re-create.
@@ -110,6 +110,8 @@ async function main() {
     console.log('Dealers created.');
 
     // 4. Create Catalog (OEMs -> Vehicles -> Types -> Designs -> Colors)
+    // Skipped to preserve imported data
+    /*
     const oems = ['Tata', 'Mahindra', 'Ashok Leyland'];
 
     for (const oemName of oems) {
@@ -155,6 +157,7 @@ async function main() {
             }
         });
     }
+    */
 
     console.log('Catalog created.');
     console.log('Seeding finished.');

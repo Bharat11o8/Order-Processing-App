@@ -5,15 +5,22 @@ import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { createOrderSchema, type CreateOrderRequest } from '@/lib/validators/order';
-import { Trash2, Plus, Loader2, ShoppingCart, User, CreditCard } from 'lucide-react';
+import { Trash2, Plus, Loader2, ShoppingCart, User, CreditCard, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 // Types for Catalog Data
 type Dealer = { id: string; name: string; location: string; mobile: string | null; subDealers: { id: string; name: string }[] };
 type OEM = { id: string; name: string };
-type Vehicle = { id: string; name: string };
-type VehicleType = { id: string; name: string };
-type Design = { id: string; productCode: string; unitType: 'PCS' | 'SET'; seatOption: 'SINGLE' | 'DOUBLE' | 'BOTH'; colors: { id: string; name: string }[] };
+type Model = { id: string; name: string; vehicleType: { id: string; name: string } };
+type Design = {
+    id: string;
+    productCode: string;
+    name: string | null;
+    unitType: 'PCS' | 'SET';
+    seatOption: 'SINGLE' | 'DOUBLE' | 'BOTH';
+    colors: { id: string; name: string; code: string | null }[];
+    variants: { id: string; seatType: string | null; colorId: string | null; productCode: string }[];
+};
 
 export default function CreateOrderPage() {
     const router = useRouter();
@@ -25,10 +32,13 @@ export default function CreateOrderPage() {
     const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateOrderRequest>({
         resolver: zodResolver(createOrderSchema),
         defaultValues: {
-            items: [{ quantity: 1, unitType: 'PCS' }], // Initial item
+            items: [{ quantity: 1, unitType: 'PCS', designId: '', productCode: '' }], // Initial item
             paymentType: 'ADVANCE',
         },
     });
+
+    const [expandedIndex, setExpandedIndex] = useState<number | null>(0); // Start with first item expanded
+    const [itemsValidity, setItemsValidity] = useState<Record<number, boolean>>({}); // Track validity of each item
 
     const { fields, append, remove } = useFieldArray({
         control,
@@ -61,7 +71,51 @@ export default function CreateOrderPage() {
         fetchData();
     }, []);
 
+    const handleAddItem = () => {
+        // Validate all current items before adding new one
+        const allValid = fields.every((_, index) => itemsValidity[index]);
+        if (!allValid) {
+            alert('Please complete all required fields (Design, Color, Seat) in the current item(s) before adding a new one.');
+            return;
+        }
+
+        append({ quantity: 1, unitType: 'PCS', designId: '', productCode: '' });
+        setExpandedIndex(fields.length);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        remove(index);
+        // Clean up validity state
+        const newValidity = { ...itemsValidity };
+        delete newValidity[index];
+        // Shift indices
+        const shiftedValidity: Record<number, boolean> = {};
+        Object.keys(newValidity).forEach(key => {
+            const k = Number(key);
+            if (k > index) shiftedValidity[k - 1] = newValidity[k];
+            else shiftedValidity[k] = newValidity[k];
+        });
+        setItemsValidity(shiftedValidity);
+
+        if (expandedIndex === index) setExpandedIndex(null);
+        else if (expandedIndex !== null && expandedIndex > index) setExpandedIndex(expandedIndex - 1);
+    };
+
+    const handleValidityChange = (index: number, isValid: boolean) => {
+        setItemsValidity(prev => {
+            if (prev[index] === isValid) return prev;
+            return { ...prev, [index]: isValid };
+        });
+    };
+
     async function onSubmit(data: CreateOrderRequest) {
+        // Final validation check
+        const allValid = fields.every((_, index) => itemsValidity[index]);
+        if (!allValid) {
+            setSubmitError('Please complete all required fields (Design, Color, Seat) for all items.');
+            return;
+        }
+
         setLoading(true);
         setSubmitError('');
         try {
@@ -185,24 +239,27 @@ export default function CreateOrderPage() {
                             </span>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="p-6 space-y-4">
                             {fields.map((field, index) => (
                                 <OrderItemRow
                                     key={field.id}
                                     index={index}
                                     control={control}
                                     register={register}
-                                    remove={remove}
+                                    remove={handleRemoveItem}
                                     oems={oems}
                                     setValue={setValue}
                                     errors={errors}
                                     watch={watch}
+                                    isExpanded={expandedIndex === index}
+                                    onToggle={() => setExpandedIndex(expandedIndex === index ? null : index)}
+                                    onValidityChange={(isValid: boolean) => handleValidityChange(index, isValid)}
                                 />
                             ))}
 
                             <button
                                 type="button"
-                                onClick={() => append({ quantity: 1, unitType: 'PCS', designId: '', productCode: '' })}
+                                onClick={handleAddItem}
                                 className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 font-semibold hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
                             >
                                 <Plus size={20} /> Add Another Item
@@ -270,167 +327,310 @@ export default function CreateOrderPage() {
 }
 
 // Sub-component for Item Row
-function OrderItemRow({ index, control, register, remove, oems, setValue, errors, watch }: any) {
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [types, setTypes] = useState<VehicleType[]>([]);
+function OrderItemRow({ index, control, register, remove, oems, setValue, errors, watch, isExpanded, onToggle, onValidityChange }: any) {
+    const [models, setModels] = useState<Model[]>([]);
     const [designs, setDesigns] = useState<Design[]>([]);
 
     // Local state
     const [selectedOem, setSelectedOem] = useState('');
-    const [selectedVehicle, setSelectedVehicle] = useState('');
-    const [selectedType, setSelectedType] = useState('');
+    const [selectedModel, setSelectedModel] = useState('');
+    const [selectedTypeName, setSelectedTypeName] = useState('');
 
     // Watched fields
     const itemDesignId = watch(`items.${index}.designId`);
+    const itemSeatType = watch(`items.${index}.seatType`);
+    const itemColorId = watch(`items.${index}.colorId`);
+    const itemProductCode = watch(`items.${index}.productCode`);
+    const itemQuantity = watch(`items.${index}.quantity`);
+
     const currentDesign = designs.find(d => d.id === itemDesignId);
+
+    // Validation Logic
+    useEffect(() => {
+        let isValid = false;
+        if (currentDesign) {
+            // 2. Seat Validation
+            const isSeatDisabled =
+                currentDesign.seatOption !== 'BOTH' ||
+                oems.find((o: any) => o.id === selectedOem)?.name === 'OTHER' ||
+                (currentDesign.name && (
+                    currentDesign.name.includes('SPIKE') ||
+                    (currentDesign.name.includes('MAT') && models.find((m: any) => m.id === selectedModel)?.name.includes('CHETAK'))
+                ));
+
+            const isSeatValid = isSeatDisabled || !!itemSeatType;
+
+            // 3. Color Validation
+            const isColorValid = !!itemColorId;
+
+            isValid = isSeatValid && isColorValid;
+        }
+
+        if (onValidityChange) onValidityChange(isValid);
+    }, [currentDesign, itemSeatType, itemColorId, selectedOem, selectedModel, models, oems, onValidityChange]);
 
     // Fetch Logic
     useEffect(() => {
         if (selectedOem) {
-            fetch(`/api/catalog/vehicles?oemId=${selectedOem}`).then(r => r.json()).then(setVehicles);
-        } else { setVehicles([]); }
+            fetch(`/api/catalog/models?oemId=${selectedOem}`)
+                .then(r => {
+                    if (!r.ok) throw new Error('Failed to fetch models');
+                    return r.json();
+                })
+                .then(data => {
+                    if (Array.isArray(data)) setModels(data);
+                    else {
+                        console.error('Invalid models data:', data);
+                        setModels([]);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    setModels([]);
+                });
+        } else { setModels([]); }
     }, [selectedOem]);
 
     useEffect(() => {
-        if (selectedVehicle) {
-            fetch(`/api/catalog/vehicle-types?vehicleId=${selectedVehicle}`).then(r => r.json()).then(setTypes);
-        } else { setTypes([]); }
-    }, [selectedVehicle]);
+        if (selectedModel) {
+            // Auto-fill Type
+            const model = models.find(m => m.id === selectedModel);
+            if (model) {
+                setSelectedTypeName(model.vehicleType.name);
+            }
+            // Fetch Designs by Model
+            fetch(`/api/catalog/designs?modelId=${selectedModel}`).then(r => r.json()).then(setDesigns);
+        } else {
+            setDesigns([]);
+            setSelectedTypeName('');
+        }
+    }, [selectedModel, models]);
 
+    // Variant Lookup Logic
     useEffect(() => {
-        if (selectedType) {
-            fetch(`/api/catalog/designs?vehicleTypeId=${selectedType}`).then(r => r.json()).then(setDesigns);
-        } else { setDesigns([]); }
-    }, [selectedType]);
+        if (currentDesign) {
+            let code = currentDesign.productCode; // Default fallback
+
+            // Try to find matching variant
+            const variant = currentDesign.variants?.find(v => {
+                const seatMatch = (v.seatType === itemSeatType) || (!v.seatType && !itemSeatType);
+                const colorMatch = (v.colorId === itemColorId) || (!v.colorId && !itemColorId);
+                return seatMatch && colorMatch;
+            });
+
+            if (variant) {
+                code = variant.productCode;
+            } else {
+                // Fallback to dynamic logic if no variant found
+                if (itemSeatType === 'DOUBLE') code += 'A';
+                if (itemColorId) {
+                    const color = currentDesign.colors.find(c => c.id === itemColorId);
+                    if (color && color.code) code += `-${color.code}`;
+                }
+            }
+
+            setValue(`items.${index}.productCode`, code);
+        }
+    }, [currentDesign, itemSeatType, itemColorId, setValue, index]);
+
+    // Summary Helpers
+    const oemName = oems.find((o: any) => o.id === selectedOem)?.name || 'Select OEM';
+    const modelName = models.find((m: any) => m.id === selectedModel)?.name || 'Select Model';
+    const designName = currentDesign?.name || 'Select Design';
 
     return (
-        <div className="p-5 border border-slate-200 rounded-xl bg-slate-50/30 relative grid grid-cols-1 md:grid-cols-12 gap-5 items-start hover:border-blue-200 transition-colors">
-            {/* OEM */}
-            <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">OEM</label>
-                <SearchableSelect
-                    options={oems.map((o: any) => ({ id: o.id, label: o.name }))}
-                    value={selectedOem}
-                    onChange={(val) => { setSelectedOem(val); setSelectedVehicle(''); setSelectedType(''); }}
-                    placeholder="Select OEM"
-                />
-            </div>
+        <div className={`border rounded-xl transition-all ${isExpanded ? 'bg-slate-50/30 border-blue-200 shadow-sm' : 'bg-white border-slate-200 hover:border-blue-200'}`}>
+            {/* Header / Summary */}
+            <div
+                className="px-5 py-4 flex items-center justify-between cursor-pointer"
+                onClick={onToggle}
+            >
+                <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isExpanded ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        {index + 1}
+                    </div>
 
-            {/* Vehicle */}
-            <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Vehicle</label>
-                <SearchableSelect
-                    options={vehicles.map((v: any) => ({ id: v.id, label: v.name }))}
-                    value={selectedVehicle}
-                    onChange={(val) => { setSelectedVehicle(val); setSelectedType(''); }}
-                    placeholder="Select Vehicle"
-                    disabled={!selectedOem}
-                />
-            </div>
-
-            {/* Type */}
-            <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Type</label>
-                <SearchableSelect
-                    options={types.map((t: any) => ({ id: t.id, label: t.name }))}
-                    value={selectedType}
-                    onChange={(val) => setSelectedType(val)}
-                    placeholder="Select Type"
-                    disabled={!selectedVehicle}
-                />
-            </div>
-
-            {/* Design */}
-            <div className="md:col-span-3">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Design</label>
-                <Controller
-                    control={control}
-                    name={`items.${index}.designId`}
-                    render={({ field }) => (
-                        <SearchableSelect
-                            options={designs.map((d: any) => ({ id: d.id, label: d.productCode }))}
-                            value={field.value}
-                            onChange={(val) => {
-                                field.onChange(val);
-                                const design = designs.find(d => d.id === val);
-                                if (design) {
-                                    setValue(`items.${index}.productCode`, design.productCode);
-                                    setValue(`items.${index}.unitType`, design.unitType);
-
-                                    // Auto-select color
-                                    const genericColor = design.colors.find(c => c.name.toLowerCase() === 'generic');
-                                    if (design.colors.length === 1) {
-                                        setValue(`items.${index}.colorId`, design.colors[0].id);
-                                    } else if (genericColor) {
-                                        setValue(`items.${index}.colorId`, genericColor.id);
-                                    } else {
-                                        setValue(`items.${index}.colorId`, '');
-                                    }
-
-                                    // Auto-select Seat Type
-                                    if (design.seatOption === 'SINGLE') setValue(`items.${index}.seatType`, 'SINGLE');
-                                    else if (design.seatOption === 'DOUBLE') setValue(`items.${index}.seatType`, 'DOUBLE');
-                                    else setValue(`items.${index}.seatType`, '');
-                                }
-                            }}
-                            placeholder="Select Design"
-                            disabled={!selectedType}
-                        />
+                    {!isExpanded && (
+                        <div className="flex flex-col">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                {oemName} <span className="text-slate-300">/</span> {modelName}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                {designName} • Qty: {itemQuantity || 0}
+                                {itemProductCode && <span className="ml-2 text-blue-600 font-mono bg-blue-50 px-1.5 py-0.5 rounded text-[10px]">{itemProductCode}</span>}
+                            </p>
+                        </div>
                     )}
-                />
-                {errors.items?.[index]?.designId && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].designId.message}</p>}
-                {currentDesign && <span className="text-[10px] text-blue-600 font-medium mt-1 block">Code: {currentDesign.productCode}</span>}
-            </div>
 
-            {/* Seat Type */}
-            <div className="md:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seat</label>
-                <select
-                    {...register(`items.${index}.seatType`)}
-                    className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
-                    disabled={!currentDesign || currentDesign.seatOption !== 'BOTH'}
-                >
-                    <option value="">-</option>
-                    <option value="SINGLE">Sgl</option>
-                    <option value="DOUBLE">Dbl</option>
-                </select>
-                {errors.items?.[index]?.seatType && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].seatType.message}</p>}
-            </div>
-
-            {/* Color */}
-            <div className="md:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
-                {currentDesign && currentDesign.colors.length > 1 && !currentDesign.colors.some(c => c.name.toLowerCase() === 'generic') ? (
-                    <select {...register(`items.${index}.colorId`)} className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800">
-                        <option value="">-</option>
-                        {currentDesign.colors.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                ) : (
-                    <div className="h-[38px] w-full bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 text-xs">-</div>
-                )}
-            </div>
-
-            {/* Quantity */}
-            <div className="md:col-span-1">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Qty</label>
-                <div className="relative">
-                    <input
-                        type="number"
-                        {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                        className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800"
-                        min="1"
-                    />
-                    <span className="absolute right-2 top-2 text-[10px] text-slate-400 font-medium">{currentDesign?.unitType || ''}</span>
+                    {isExpanded && (
+                        <h3 className="text-sm font-bold text-slate-800">Item Details</h3>
+                    )}
                 </div>
-                {errors.items?.[index]?.quantity && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].quantity.message}</p>}
+
+                <div className="flex items-center gap-3">
+                    {!isExpanded && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); remove(index); }}
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+
+                    <div className="text-slate-400">
+                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                    </div>
+                </div>
             </div>
 
-            {/* Remove */}
-            <div className="md:col-span-12 absolute -top-3 -right-3">
-                <button type="button" onClick={() => remove(index)} className="p-1.5 bg-white text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full shadow-sm border border-slate-200 transition-all">
-                    <Trash2 size={14} />
-                </button>
-            </div>
+            {/* Expanded Content */}
+            {isExpanded && (
+                <div className="px-5 pb-5 pt-0 grid grid-cols-1 md:grid-cols-12 gap-5 items-start border-t border-slate-100 mt-2 pt-4">
+                    {/* OEM */}
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">OEM</label>
+                        <SearchableSelect
+                            options={oems.map((o: any) => ({ id: o.id, label: o.name }))}
+                            value={selectedOem}
+                            onChange={(val) => { setSelectedOem(val); setSelectedModel(''); setSelectedTypeName(''); }}
+                            placeholder="Select OEM"
+                        />
+                    </div>
+
+                    {/* Model */}
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Model</label>
+                        <SearchableSelect
+                            options={models.map((m: any) => ({ id: m.id, label: m.name }))}
+                            value={selectedModel}
+                            onChange={(val) => { setSelectedModel(val); }}
+                            placeholder="Select Model"
+                            disabled={!selectedOem}
+                        />
+                    </div>
+
+                    {/* Type (Auto-filled) */}
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Type</label>
+                        <input
+                            type="text"
+                            value={selectedTypeName}
+                            readOnly
+                            className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-500 font-medium cursor-not-allowed"
+                            placeholder="Auto-filled"
+                        />
+                    </div>
+
+                    {/* Design */}
+                    <div className="md:col-span-3">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Design</label>
+                        <Controller
+                            control={control}
+                            name={`items.${index}.designId`}
+                            render={({ field }) => (
+                                <SearchableSelect
+                                    value={field.value}
+                                    onChange={(val) => {
+                                        field.onChange(val);
+                                        const design = designs.find(d => d.id === val);
+                                        if (design) {
+                                            setValue(`items.${index}.unitType`, design.unitType);
+
+                                            // Auto-select color
+                                            const genericColor = design.colors.find(c => c.name.toLowerCase() === 'generic');
+                                            if (design.colors.length === 1) {
+                                                setValue(`items.${index}.colorId`, design.colors[0].id);
+                                            } else if (genericColor) {
+                                                setValue(`items.${index}.colorId`, genericColor.id);
+                                            } else {
+                                                setValue(`items.${index}.colorId`, '');
+                                            }
+
+                                            // Auto-select Seat Type
+                                            if (design.seatOption === 'SINGLE') setValue(`items.${index}.seatType`, 'SINGLE');
+                                            else if (design.seatOption === 'DOUBLE') setValue(`items.${index}.seatType`, 'DOUBLE');
+                                            else setValue(`items.${index}.seatType`, '');
+                                        }
+                                    }}
+                                    options={designs.map((d: any) => ({
+                                        id: d.id,
+                                        label: d.name // Show only Name
+                                    }))}
+                                    placeholder="Select Design"
+                                    disabled={!selectedModel}
+                                />
+                            )}
+                        />
+                        {errors.items?.[index]?.designId && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].designId.message}</p>}
+                    </div>
+
+                    {/* Seat Type */}
+                    <div className="md:col-span-1">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seat</label>
+                        <select
+                            {...register(`items.${index}.seatType`)}
+                            className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+                            disabled={
+                                !currentDesign ||
+                                currentDesign.seatOption !== 'BOTH' ||
+                                oems.find((o: any) => o.id === selectedOem)?.name === 'OTHER' ||
+                                (currentDesign.name && (
+                                    currentDesign.name.includes('SPIKE') ||
+                                    (currentDesign.name.includes('MAT') && models.find((m: any) => m.id === selectedModel)?.name.includes('CHETAK'))
+                                ))
+                            }
+                        >
+                            <option value="">-</option>
+                            <option value="SINGLE">Sgl</option>
+                            <option value="DOUBLE">Dbl</option>
+                        </select>
+                        {errors.items?.[index]?.seatType && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].seatType.message}</p>}
+                    </div>
+
+                    {/* Color */}
+                    <div className="md:col-span-1">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
+                        {currentDesign && currentDesign.colors.length > 1 ? (
+                            <select
+                                {...register(`items.${index}.colorId`)}
+                                className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800"
+                                defaultValue={currentDesign.colors[0].id} // Default to first
+                            >
+                                {/* No empty option to force selection */}
+                                {currentDesign.colors.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        ) : (
+                            <div className="h-[38px] w-full bg-slate-100 border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 text-xs">
+                                {currentDesign?.colors[0]?.name === 'Generic' ? '-' : (currentDesign?.colors[0]?.name || '-')}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Quantity */}
+                    <div className="md:col-span-1">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Qty</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                {...register(`items.${index}.quantity`, { valueAsNumber: true })}
+                                className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-slate-800"
+                                min="1"
+                            />
+                            <span className="absolute right-2 top-2 text-[10px] text-slate-400 font-medium">{currentDesign?.unitType || ''}</span>
+                        </div>
+                        {errors.items?.[index]?.quantity && <p className="text-red-600 text-[10px] mt-1 font-medium">{errors.items[index].quantity.message}</p>}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
